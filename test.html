@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<div id="app">
+    {{message}}
+    <div>
+        <p :class="pcoment" :style="font-size:50px" v-html="htmlData"></p>
+        <input type="text" v-model="modelData">
+        <p>{{ modelData }}</p>
+    </div>
+</div>
+<script>
+    // 创建KVue实例
+    class KVue extends EventTarget {
+        constructor(option) {
+            super()
+            // 创建class内部的option，用以获取传入的option
+            this.$option = option
+            let el = document.querySelector(option.el)// 获取option中的组件内容
+            this.compileNode(el)
+            this.observe(this.$option.data)
+        }
+        // 添加数据劫持
+        observe(data){
+            let keys = Object.keys(data)
+            keys.forEach((key)=>{
+                this.dataProxy(data,key,data[key])
+            })
+        }
+        // 劫持数据，添加数据响应式
+        dataProxy(data,key,value){
+            let _this = this
+            Object.defineProperty(data,key,{
+                configurable:true,
+                enumerable:true,
+                set(newVal){
+                    value = newVal
+                    let event = new Event(key)
+                    _this.dispatchEvent(event)
+                },
+                get(){
+                    return value
+                }
+            })
+        }
+        compileNode(el) {
+            // 获取首层div下的子内容，首层不做操作
+            let child = el.childNodes;
+            child.forEach(node => {
+                // 通过nodeType判断元素类型
+                if (node.nodeType === 1) {
+                    // 获取属性集合
+                    let attrs = node.attributes
+                    // attrs是一个伪Map,需要解构之后才可以forEach，头部;避免报错
+                    ;[...attrs].forEach((attr)=>{
+                        // 获取
+                        let attrName = attr.name
+                        if(attrName.indexOf("v-")===0){
+                            let attrValue = attr.value;
+                            if(attrName==="v-html"){
+                                node.innerHTML = this.$option.data[attrValue]
+                                this.addEventListener(attrValue,()=>{
+                                    node.innerHTML = this.$option.data[attrValue]
+                                })
+                            }else if(attrName === 'v-model'){
+                                node.value = this.$option.data[attrValue]
+                                this.addEventListener(attrValue,(e)=>{
+                                    node.value = this.$option.data[attrValue]
+                                })
+                                // 类型太多暂时只考虑input
+                                node.addEventListener('input',({target})=>{
+                                    this.$option.data[attrValue] = target.value
+                                })
+                            }
+                        }else if(attrName.indexOf(":")===0){
+                            let attrValue = attr.value;
+                            // css
+                            if(attrName===":class"){
+                                node.className = `${attrValue}`
+                            }
+                            // style
+                            else if(attrName===":style"){
+                                node.style = `${attrValue}`
+                            }
+                        }
+                    })
+                    if (node.childNodes.length > 0) {
+                        this.compileNode(node)
+                    }
+                } else if (node.nodeType === 3) {
+                    let textContent = node.textContent
+                    let reg = /\{\{\s*(\S+)\s*\}\}/g
+                    if(reg.test(textContent)){
+                        node.textContent = textContent.replace(reg,(...arg)=>{
+                            this.addEventListener(arg[1],()=>{
+                                node.textContent = textContent.replace(reg,(...arg)=>{
+                                    return this.$option.data[arg[1]]
+                                })
+                            })
+                            return this.$option.data[arg[1]]
+                        })
+                    }
+                }
+            })
+        }
+    }
+    let kvue = new KVue({
+        el: "#app",
+        data: {
+            message: "Hello",
+            htmlData: "<strong>2312312</strong>",
+            modelData:'dsaweq'
+        }
+    })
+</script>
+<style>
+    .pcoment{
+        color:red;
+    }
+</style>
+</html>
